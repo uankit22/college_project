@@ -6,3 +6,4 @@ imageio
 werkzeug
 gunicorn
 matplotlib
+flask-cors
