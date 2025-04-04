@@ -145,6 +145,7 @@ def Ying_2017_CAIP(img, mu=0.5, a=-0.4293, b=1.2258):
 def main():
     img_name = sys.argv[1]
     img = imageio.v2.imread(img_name)
+    img = cv2.resize(img, (800, 600))  # Resize to 800x600
 
     if len(img.shape) == 2:  # Grayscale image
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
