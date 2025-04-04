@@ -6,4 +6,3 @@ imageio
 werkzeug
 gunicorn
 matplotlib
-scipy.sparse
