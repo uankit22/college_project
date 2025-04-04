@@ -6,6 +6,7 @@ from scipy.sparse import csc_matrix
 import cv2
 import sys
 import scipy.optimize
+from scipy.sparse import csc_matrix, linalg
 
 def computeTextureWeights(fin, sigma, sharpness):
     dt0_v = np.vstack((np.diff(fin, n=1, axis=0), fin[0,:]-fin[-1,:]))
@@ -19,39 +20,40 @@ def computeTextureWeights(fin, sigma, sharpness):
 
     return  W_h, W_v
 
+
+
 def solveLinearEquation(IN, wx, wy, lamda):
     [r, c] = IN.shape
     k = r * c
-    dx =  -lamda * wx.flatten('F')
-    dy =  -lamda * wy.flatten('F')
+
+    dx = -lamda * wx.flatten('F')
+    dy = -lamda * wy.flatten('F')
+
     tempx = np.roll(wx, 1, axis=1)
     tempy = np.roll(wy, 1, axis=0)
-    dxa = -lamda *tempx.flatten('F')
-    dya = -lamda *tempy.flatten('F')
-    tmp = wx[:,-1]
-    tempx = np.concatenate((tmp[:,None], np.zeros((r,c-1))), axis=1)
-    tmp = wy[-1,:]
-    tempy = np.concatenate((tmp[None,:], np.zeros((r-1,c))), axis=0)
-    dxd1 = -lamda * tempx.flatten('F')
-    dyd1 = -lamda * tempy.flatten('F')
+
+    dxa = -lamda * tempx.flatten('F')
+    dya = -lamda * tempy.flatten('F')
 
     wx[:,-1] = 0
     wy[-1,:] = 0
+
     dxd2 = -lamda * wx.flatten('F')
     dyd2 = -lamda * wy.flatten('F')
 
-    Ax = scipy.sparse.spdiags(np.concatenate((dxd1[:,None], dxd2[:,None]), axis=1).T, np.array([-k+r,-r]), k, k)
-    Ay = scipy.sparse.spdiags(np.concatenate((dyd1[None,:], dyd2[None,:]), axis=0), np.array([-r+1,-1]), k, k)
-    D = 1 - ( dx + dy + dxa + dya)
-    A = ((Ax+Ay) + (Ax+Ay).conj().T + scipy.sparse.spdiags(D, 0, k, k)).T
+    Ax = scipy.sparse.spdiags([dxd2], [-r], k, k)
+    Ay = scipy.sparse.spdiags([dyd2], [-1], k, k)
 
-    A = csc_matrix(A)  # Convert to CSC matrix format for spsolve
+    D = 1 - (dx + dy + dxa + dya)
+    A = (Ax + Ay) + (Ax + Ay).conj().T + scipy.sparse.spdiags(D, 0, k, k)
+    A = csc_matrix(A)  
 
-    tin = IN[:,:]
-    tout = scipy.sparse.linalg.spsolve(A, tin.flatten('F'))
+    tin = IN.flatten('F')
+    tout = scipy.sparse.linalg.spsolve(A, tin)
     OUT = np.reshape(tout, (r, c), order='F')
 
     return OUT
+
 
 def tsmooth(img, lamda=0.01, sigma=5.0, sharpness=0.05):  # Increase sharpness
     I = cv2.normalize(img.astype('float64'), None, 0.0, 1.0, cv2.NORM_MINMAX)
@@ -142,30 +144,50 @@ def Ying_2017_CAIP(img, mu=0.5, a=-0.4293, b=1.2258):
     result[result < 0] = 0
     return result.astype(np.uint8)
 
+def resize_image(img, max_width=800, max_height=800):
+    """ Resize the image if it's too large to reduce memory usage. """
+    h, w = img.shape[:2]
+    if w > max_width or h > max_height:
+        scale_w = max_width / w
+        scale_h = max_height / h
+        scale = min(scale_w, scale_h)
+        new_w, new_h = int(w * scale), int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return img
+
 def main():
     img_name = sys.argv[1]
     img = imageio.v2.imread(img_name)
-    img = cv2.resize(img, (800, 600))  # Resize to 800x600
 
-    if len(img.shape) == 2:  # Grayscale image
+    # Convert grayscale to RGB
+    if len(img.shape) == 2:  
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
 
-    result = Ying_2017_CAIP(img)  # Perform contrast enhancement
+    # Handle images with alpha channel (e.g., transparent PNGs)
+    if img.shape[-1] == 4:  
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)  
 
-    # Apply additional gamma correction for more contrast
-    gamma = 1.2 + (0.8 * (0.5 - np.mean(result/255.0)))  # Adjust gamma based on brightness
+    # Resize large images to prevent memory issues
+    img = resize_image(img)
 
-    result = np.power(result/255.0, gamma) * 255
+    # Perform contrast enhancement
+    result = Ying_2017_CAIP(img)
+
+    # Apply additional gamma correction for better contrast
+    gamma = 1.2 + (0.8 * (0.5 - np.mean(result / 255.0)))  
+    result = np.power(result / 255.0, gamma) * 255
     result = np.clip(result, 0, 255).astype(np.uint8)
 
-    plt.imshow(result)
-    plt.axis('off')  # Hide axis for display
+    # Show image
+    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for proper display
+    plt.axis('off')
     plt.show()
 
     # Save the result to file
     output_filename = "enhanced_" + img_name
     imageio.imwrite(output_filename, result)
     print(f"Enhanced image saved as {output_filename}")
+
 
 if __name__ == '__main__':
     main()
