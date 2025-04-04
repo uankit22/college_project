@@ -1,4 +1,5 @@
 from flask import Flask, request, send_file, jsonify
+from flask_cors import CORS  # Import CORS
 import os
 import cv2
 import numpy as np
@@ -7,6 +8,7 @@ from contrast import Ying_2017_CAIP  # Importing the contrast enhancement functi
 
 # Flask app setup
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # File Upload Configuration
 UPLOAD_FOLDER = "uploads"
@@ -45,6 +47,9 @@ def upload_file():
 
     # Read Image
     img = cv2.imread(filepath)
+    if img is None:
+        return jsonify({"error": "Invalid image file"}), 400
+
     enhanced_img = Ying_2017_CAIP(img)  # Enhance contrast
 
     # Save Processed Image
