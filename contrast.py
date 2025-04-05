@@ -154,6 +154,16 @@ def resize_image(img, max_width=800, max_height=800):
         new_w, new_h = int(w * scale), int(h * scale)
         img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
     return img
+def enhance_contrast_clahe(img):
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+    enhanced_lab = cv2.merge((cl, a, b))
+    enhanced_img = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2BGR)
+
+    return enhanced_img
 
 def main():
     img_name = sys.argv[1]
@@ -170,8 +180,11 @@ def main():
     # Resize large images to prevent memory issues
     img = resize_image(img)
 
-    # Perform contrast enhancement
+    # Perform low-light enhancement
     result = Ying_2017_CAIP(img)
+
+    # Enhance contrast using CLAHE
+    result = enhance_contrast_clahe(result)
 
     # Apply additional gamma correction for better contrast
     gamma = 1.2 + (0.8 * (0.5 - np.mean(result / 255.0)))  
